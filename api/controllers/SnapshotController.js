@@ -51,11 +51,182 @@ module.exports = _.merge(_.cloneDeep(require('../base/Controller')), {
         });
     },
 
+    importServices: function(responseData, fns, services, req) {
+        var dataMap = {};
+        var entityNames = ['services', 'routes', 'plugins'];
+        var serviceRoutesMap = {};
+        var servicePluginsMap = {};
+        var routePluginsMap = {};
+
+
+        _.forEach(entityNames, function (name) {
+            fns.push(function (cb) {
+                KongService.listAllCb(req, '/' + name, function (err, data) {
+                    if (err) {
+                        sails.log('Cloud not fetch ' + name);
+                        return cb(err);
+                    }
+                    dataMap[name] = data.data;
+                    return cb();
+                });
+            });
+        });
+
+
+        // Clean all the existing services, routes and plugins
+        fns.push(function(cb) {
+            var delFns = [];
+            var orderedEntities = [
+                {name: 'plugins', list: dataMap['plugins']},
+                {name: 'routes', list: dataMap['routes']},
+                {name: 'services', list: dataMap['services']}
+            ];
+            _.forEach(orderedEntities, function(entity) {
+                var name = entity.name;
+                _.forEach(entity.list, function(item) {
+                    if (name === 'plugins' && !item.route_id && !item.service_id) {
+                        return;
+                    }
+
+                    //sails.log('Deleting ' + name + ' :' + item.id);
+                    delFns.push(function(cb) {
+                        sails.log('Deleting ' + name + ' :' + item.id);
+                        KongService.deleteFromEndpointCb('/' + name + '/' + item.id, req, function(err, res) {
+                            if (err) {
+                                sails.log('Cloud not delete ' + name + ', id - ' + item.id + ' err: ' + JSON.stringify(err));
+                                return cb(err);
+                            }
+
+                            sails.log('Deleted ' + name);
+
+                            return cb();
+                        });
+                    });
+
+                });
+            });
+
+            async.series(delFns,function(err,data){
+                return cb();
+            });
+        });
+
+
+        _.forEach(services, function(service) {
+            fns.push(function(cb) {
+                var obj = _.omit(service, 'plugins', 'routes', 'id');
+                KongService.createFromEndpointCb("/services", obj, req, function(err, res) {
+                    sails.log('Creating service complete');
+                    if (err) {
+                        sails.log('Cloud not create service ' + service.name + ' err: ' + JSON.stringify(err));
+                        return cb(err);
+                    }
+
+                    serviceRoutesMap[res.id] = service.routes;
+                    servicePluginsMap[res.id] = service.plugins;
+
+                    return cb();
+                });
+            });
+        });
+
+        //Create routes
+        fns.push(function(cb) {
+            var routeFns = [];
+            _.forEach(serviceRoutesMap, function(list, serviceId) {
+                _.forEach(list, function(route) {
+                    routeFns.push(function(cb) {
+                        route.service = {id: serviceId};
+                        var obj = _.omit(route, 'plugins');
+                        KongService.createFromEndpointCb("/routes", obj, req, function(err, res) {
+                            if (err) {
+                                sails.log('Cloud not create route ' + route.paths);
+                                return cb(err);
+                            }
+                            sails.log('Route creation complete: ' + route.paths);
+                            routePluginsMap[res.id] = route.plugins;
+
+                            return cb();
+                        });
+                    });
+
+                });
+
+            });
+
+            async.series(routeFns,function(err,data){
+                return cb();
+            });
+        });
+
+        //Create plugins for services
+        fns.push(function(cb) {
+            var pluginFns = [];
+            _.forEach(servicePluginsMap, function(list, serviceId) {
+                _.forEach(list, function(plugin) {
+                    pluginFns.push(function(cb) {
+                        var obj = _.omit(plugin, 'id', 'created_at');
+                        obj.service_id = serviceId;
+                        KongService.createFromEndpointCb("/plugins/", obj, req, function(err, res) {
+                            if (err) {
+                                sails.log('Cloud not create plugin  ' + plugin.name + ' for service ' + serviceId);
+                                return cb(err);
+                            }
+
+                            sails.log('Route plugin created');
+                            return cb();
+                        });
+                    });
+
+                });
+
+            });
+
+            async.series(pluginFns,function(err,data){
+                return cb();
+            });
+        });
+
+        //Create plugins for routes
+        fns.push(function(cb) {
+            var pluginFns = [];
+            _.forEach(routePluginsMap, function(list, routeId) {
+                _.forEach(list, function(plugin) {
+                    pluginFns.push(function(cb) {
+                        var obj = _.omit(plugin, 'id', 'created_at');
+                        obj.route_id = routeId;
+                        sails.log('Creating Route plugin... ' + JSON.stringify(obj));
+                        KongService.createFromEndpointCb("/plugins/", obj, req, function(err, res) {
+                            if (err) {
+                                sails.log('Cloud not create plugin  ' + plugin.name + ' for route ' + routeId + ' err: ' + JSON.stringify(err));
+                                return cb(err);
+                            }
+
+                            sails.log('Route plugin created');
+                            return cb();
+                        });
+                    });
+
+                });
+
+            });
+
+            async.series(pluginFns,function(err,data){
+                return cb();
+            });
+        });
+
+
+        // TODO: Add failed/successful counters
+
+
+    },
 
     restore : function(req,res) {
 
         var snaphsot_id = req.params.id
         var responseData = {}
+        var self = this;
 
         sails.models.snapshot.findOne({
             id : snaphsot_id
@@ -84,6 +255,7 @@ module.exports = _.merge(_.cloneDeep(require('../base/Controller')), {
 
             sails.log("imports", imports);
 
+            self.importServices(responseData, fns, snapshot.data.services, req);
 
             imports.forEach(function(key){
 
@@ -127,6 +299,7 @@ module.exports = _.merge(_.cloneDeep(require('../base/Controller')), {
                                 sails.log("item",item);
 
                             }
+
 
 
                             KongService.createFromEndpointCb("/" + ( path || key ),item,req,function(err,created){

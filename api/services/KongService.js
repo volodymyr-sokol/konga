@@ -55,7 +55,6 @@ var KongService = {
     },
 
     createFromEndpointCb: function (endpoint,data, req, cb) {
-
         unirest.post(req.connection.kong_admin_url + endpoint)
             .headers(KongService.headers(req, true))
             .send(data)
@@ -217,6 +216,16 @@ var KongService = {
                 }
 
                 return cb(null,response.body);
+            });
+    },
+
+    deleteFromEndpointCb: function (endpoint, req, cb) {
+        sails.log('Deleting ' + req.connection.kong_admin_url + endpoint);
+        unirest.delete(req.connection.kong_admin_url + endpoint)
+            .headers(KongService.headers(req, true))
+            .end(function (response) {
+                if (response.error)  return cb(response)
+                return cb(null,response.body)
             });
     }
 }

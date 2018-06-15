@@ -50,6 +50,67 @@ module.exports = {
           return cb(err);
         }
 
+        var servicePluginsMap = {};
+        var routePluginsMap = {};
+        var pluginsUpdated = [];
+        var routesUpdated = [];
+
+        _.forEach(result.plugins, function(plugin) {
+          if (plugin.service_id) {
+
+            if(!(plugin.service_id in servicePluginsMap)) {
+              servicePluginsMap[plugin.service_id ] = [];
+            }
+            servicePluginsMap[plugin.service_id].push(plugin);
+
+          } else if (plugin.route_id) {
+
+            if(!(plugin.route_id in routePluginsMap)) {
+              routePluginsMap[plugin.route_id ] = [];
+            }
+            routePluginsMap[plugin.route_id].push(plugin);
+
+          } else {
+            pluginsUpdated.push(plugin);
+          }
+        });
+
+        result.plugins = pluginsUpdated;
+
+        _.forEach(servicePluginsMap, function(arr, service_id) {
+          var service = _.find(result.services, {id: service_id});
+
+          if (service) {
+            service.plugins = arr
+          }
+
+        });
+
+        _.forEach(routePluginsMap, function(arr, route_id) {
+          var route = _.find(result.routes, {id: route_id});
+
+          if (route) {
+            route.plugins = arr
+          }
+        });
+
+        _.forEach(result.routes, function(route) {
+          var routes = routesUpdated;
+          if(route.service && route.service.id) {
+            var service = _.find(result.services, {id: route.service.id});
+
+            if(service) {
+              if (!service.routes) {
+                service.routes = [];
+              }
+              routes = service.routes;
+            }
+          }
+          routes.push(route);
+        });
+
+        result.routes = [];
+
         // Foreach consumer get it's acls
         var consumerFns = []
         result.consumers.forEach(function (consumer) {
