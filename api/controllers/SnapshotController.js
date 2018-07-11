@@ -68,13 +68,9 @@ module.exports = _.merge(_.cloneDeep(require('../base/Controller')), {
         });
     },
 
-    importServices: function(responseData, fns, services, req) {
+    clearEntities: function(responseData, fns, req) {
         var dataMap = {};
-        var entityNames = ['services', 'routes', 'plugins'];
-        var serviceRoutesMap = {};
-        var servicePluginsMap = {};
-        var routePluginsMap = {};
-
+        var entityNames = ['services', 'routes', 'plugins', 'apis', 'consumers', 'upstreams'];
 
         _.forEach(entityNames, function (name) {
             fns.push(function (cb) {
@@ -89,22 +85,20 @@ module.exports = _.merge(_.cloneDeep(require('../base/Controller')), {
             });
         });
 
-
         // Clean all the existing services, routes and plugins
         fns.push(function(cb) {
             var delFns = [];
             var orderedEntities = [
                 {name: 'plugins', list: dataMap['plugins']},
                 {name: 'routes', list: dataMap['routes']},
-                {name: 'services', list: dataMap['services']}
+                {name: 'services', list: dataMap['services']},
+                {name: 'apis', list: dataMap['apis']},
+                {name: 'consumers', list: dataMap['consumers']},
+                {name: 'upstreams', list: dataMap['upstreams']}
             ];
             _.forEach(orderedEntities, function(entity) {
                 var name = entity.name;
                 _.forEach(entity.list, function(item) {
-                    if (name === 'plugins' && !item.route_id && !item.service_id) {
-                        return;
-                    }
-
                     //sails.log('Deleting ' + name + ' :' + item.id);
                     delFns.push(function(cb) {
                         sails.log('Deleting ' + name + ' :' + item.id);
@@ -127,7 +121,12 @@ module.exports = _.merge(_.cloneDeep(require('../base/Controller')), {
                 return cb();
             });
         });
+    },
 
+    importServices: function(responseData, fns, services, req) {
+        var serviceRoutesMap = {};
+        var servicePluginsMap = {};
+        var routePluginsMap = {};
 
         _.forEach(services, function(service) {
             fns.push(function(cb) {
@@ -241,8 +240,9 @@ module.exports = _.merge(_.cloneDeep(require('../base/Controller')), {
 
     restore : function(req,res) {
 
-        var snaphsot_id = req.params.id
-        var responseData = {}
+        var snaphsot_id = req.params.id;
+        var clearEntities = "clear_entities" in req.query && req.query["clear_entities"];
+        var responseData = {};
         var self = this;
 
         sails.models.snapshot.findOne({
@@ -271,6 +271,10 @@ module.exports = _.merge(_.cloneDeep(require('../base/Controller')), {
 
 
             sails.log("imports", imports);
+
+            if (clearEntities) {
+                self.clearEntities(responseData, fns, req);
+            }
 
             self.importServices(responseData, fns, snapshot.data.services, req);
 
