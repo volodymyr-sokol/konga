@@ -79,5 +79,23 @@ module.exports = _.merge(_.cloneDeep(require('../base/Controller')), {
 
 
             })
+    },
+
+    find: function(req, res) {
+        sails.log("Node List Query - " + JSON.stringify(req.query))
+        var params = {};
+
+        if (req.query && "kong_admin_url" in req.query) {
+            params["kong_admin_url"] = req.query["kong_admin_url"]
+        }
+
+        sails.models.kongnode.find(params)
+            .exec(function afterwards(err, nodes){
+                if (err) return res.negotiate(err);
+
+                return res.json(nodes)
+            });
     }
+
+
 });

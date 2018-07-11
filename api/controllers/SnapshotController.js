@@ -51,6 +51,23 @@ module.exports = _.merge(_.cloneDeep(require('../base/Controller')), {
         });
     },
 
+    takeSnapShotSync : function(req,res) {
+
+        // Get node
+        sails.models.kongnode.findOne({
+            id : req.param("node_id")
+        }).exec(function(err,node){
+            if(err) return res.negotiate(err)
+            if(!node) return res.badRequest({
+                message : "Invalid Kong Node"
+            })
+
+            SnapshotsService.takeSnapShot(req.param("name"), node,function (err, ok) {
+                res.ok();
+            });
+        });
+    },
+
     importServices: function(responseData, fns, services, req) {
         var dataMap = {};
         var entityNames = ['services', 'routes', 'plugins'];
@@ -331,7 +348,7 @@ module.exports = _.merge(_.cloneDeep(require('../base/Controller')), {
                                     // Import acls
                                     consumerAcls.forEach(function(acl){
                                         consumerFns.push(function(cb){
-                                            KongService.createFromEndpointCb("/" + key + "/" + item.id + "/acls",acl,req,function(err,created){
+                                            KongService.createFromEndpointCb("/" + key + "/" + created.id + "/acls",acl,req,function(err,created){
 
                                                 if(err) {
                                                     sails.log.error("Restore snapshot","Failed to create",key,item.name,err.raw_body);
@@ -354,7 +371,7 @@ module.exports = _.merge(_.cloneDeep(require('../base/Controller')), {
                                         credentialKey,consumerCredentials[credentialKey].forEach(function(credentialData){
 
                                             consumerFns.push(function(cb){
-                                                KongService.createFromEndpointCb("/" + key + "/" + item.id + "/" + credentialKey,credentialData,req,function(err,created){
+                                                KongService.createFromEndpointCb("/" + key + "/" + created.id + "/" + credentialKey,credentialData,req,function(err,created){
 
                                                     if(err) {
                                                         sails.log.error("Restore snapshot","Failed to create",key,item.name,err.raw_body);
@@ -428,7 +445,17 @@ module.exports = _.merge(_.cloneDeep(require('../base/Controller')), {
             }
 
         })
-    }
+    },
+
+    create : function(req, res) {
+
+        sails.models.snapshot.create(req.body)
+            .exec(function(err, data){
+            if(err) return res.negotiate(err)
+
+            res.json(data);
+        });
+    },
 
 });
 

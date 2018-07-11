@@ -201,6 +201,8 @@ module.exports = {
                   });
                 }
 
+                cb(err, created)
+
               });
             })
           } else {
@@ -218,6 +220,8 @@ module.exports = {
                   }
                 });
               }
+
+              cb(err, created)
 
             });
           }

@@ -76,9 +76,12 @@ module.exports.routes = {
 
   // Snapshots
   'POST /api/snapshots/take': 'SnapshotController.takeSnapShot',
+  'POST /api/snapshots/take_sync': 'SnapshotController.takeSnapShotSync',
   'GET /api/snapshots/subscribe': 'SnapshotController.subscribe',
   'POST /api/snapshots/:id/restore': 'SnapshotController.restore',
   'GET /api/snapshots/:id/download': 'SnapshotController.download',
+  'POST /api/snapshots/create': 'SnapshotController.create',
+
 
   // KongServices
   'GET /api/kongservices/tags': 'KongServicesController.listTags',
@@ -102,6 +105,7 @@ module.exports.routes = {
 
   'GET /api/settings': 'SettingsController.find',
   'GET /api/settings/integrations': 'SettingsController.getIntegrations',
+  'GET /api/kongnodes/list': 'KongNodeController.find',
 
 
   /**
